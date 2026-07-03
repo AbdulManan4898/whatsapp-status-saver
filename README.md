@@ -109,5 +109,4 @@ MIT License
 ## Author
 
 Abdul Manan
-Software Engineer
 

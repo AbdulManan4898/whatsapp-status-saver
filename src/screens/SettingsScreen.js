@@ -1,4 +1,3 @@
-// src/screens/SettingsScreen.js
 import React from 'react';
 import {
   View,
@@ -6,129 +5,164 @@ import {
   StyleSheet,
   Switch,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
+  Linking,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../theme/ThemeContext';
 
 const SettingsScreen = () => {
-  const { colors, isDarkMode, toggleTheme } = useTheme();
+  const { theme, isDark, toggleTheme } = useTheme();
 
-  const SettingItem = ({ icon, title, subtitle, rightElement, onPress }) => (
-    <TouchableOpacity 
-      style={[styles.settingItem, { borderBottomColor: colors.border }]}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <View style={styles.settingLeft}>
-        <Icon name={icon} size={24} color={colors.primary} />
-        <View style={styles.settingTextContainer}>
-          <Text style={[styles.settingTitle, { color: colors.text }]}>
-            {title}
-          </Text>
-          {subtitle && (
-            <Text style={[styles.settingSubtitle, { color: colors.textSecondary }]}>
-              {subtitle}
+  const settingsSections = [
+    {
+      title: 'Appearance',
+      items: [
+        {
+          icon: isDark ? 'moon' : 'sunny',
+          label: 'Dark Mode',
+          type: 'switch',
+          value: isDark,
+          onPress: toggleTheme,
+        },
+      ],
+    },
+    {
+      title: 'Storage',
+      items: [
+        {
+          icon: 'folder-open',
+          label: 'Storage Path',
+          type: 'button',
+          subtitle: 'Default',
+          onPress: () => console.log('Change storage path'),
+        },
+        {
+          icon: 'trash-bin',
+          label: 'Clear Cache',
+          type: 'button',
+          subtitle: 'Clear temporary files',
+          onPress: () => console.log('Clear cache'),
+        },
+      ],
+    },
+    {
+      title: 'About',
+      items: [
+        {
+          icon: 'information-circle',
+          label: 'Version',
+          type: 'info',
+          subtitle: '1.0.0',
+        },
+        {
+          icon: 'chatbubble',
+          label: 'Privacy Policy',
+          type: 'button',
+          onPress: () => Linking.openURL('https://example.com/privacy'),
+        },
+        {
+          icon: 'mail',
+          label: 'Contact Support',
+          type: 'button',
+          onPress: () => Linking.openURL('mailto:support@example.com'),
+        },
+      ],
+    },
+  ];
+
+  const renderSettingItem = (item, index) => {
+    switch (item.type) {
+      case 'switch':
+        return (
+          <View key={index} style={[styles.settingItem, { borderBottomColor: theme.border }]}>
+            <View style={styles.settingLeft}>
+              <Icon name={item.icon} size={24} color={theme.primary} />
+              <Text style={[styles.settingLabel, { color: theme.textPrimary }]}>
+                {item.label}
+              </Text>
+            </View>
+            <Switch
+              value={item.value}
+              onValueChange={item.onPress}
+              trackColor={{ false: theme.border, true: theme.primary }}
+              thumbColor={item.value ? '#FFFFFF' : '#FFFFFF'}
+            />
+          </View>
+        );
+      case 'button':
+        return (
+          <TouchableOpacity
+            key={index}
+            style={[styles.settingItem, { borderBottomColor: theme.border }]}
+            onPress={item.onPress}
+          >
+            <View style={styles.settingLeft}>
+              <Icon name={item.icon} size={24} color={theme.primary} />
+              <Text style={[styles.settingLabel, { color: theme.textPrimary }]}>
+                {item.label}
+              </Text>
+            </View>
+            <View style={styles.settingRight}>
+              {item.subtitle && (
+                <Text style={[styles.settingSubtitle, { color: theme.textLight }]}>
+                  {item.subtitle}
+                </Text>
+              )}
+              <Icon name="chevron-forward" size={20} color={theme.textLight} />
+            </View>
+          </TouchableOpacity>
+        );
+      case 'info':
+        return (
+          <View key={index} style={[styles.settingItem, { borderBottomColor: theme.border }]}>
+            <View style={styles.settingLeft}>
+              <Icon name={item.icon} size={24} color={theme.primary} />
+              <Text style={[styles.settingLabel, { color: theme.textPrimary }]}>
+                {item.label}
+              </Text>
+            </View>
+            <Text style={[styles.settingSubtitle, { color: theme.textLight }]}>
+              {item.subtitle}
             </Text>
-          )}
-        </View>
-      </View>
-      {rightElement || (
-        <Icon name="chevron-forward" size={20} color={colors.textSecondary} />
-      )}
-    </TouchableOpacity>
-  );
+          </View>
+        );
+      default:
+        return null;
+    }
+  };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* App Info */}
-        <View style={[styles.headerSection, { borderBottomColor: colors.border }]}>
-          <View style={styles.logoContainer}>
-            <View style={[styles.logo, { backgroundColor: colors.primary }]}>
-              <Icon name="download" size={40} color="#FFFFFF" />
-            </View>
-            <Text style={[styles.appName, { color: colors.text }]}>
-              Status Saver
-            </Text>
-            <Text style={[styles.appVersion, { color: colors.textSecondary }]}>
-              Version 1.0.0
-            </Text>
+    <ScrollView
+      style={[styles.container, { backgroundColor: theme.background }]}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.header}>
+        <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>
+          Settings
+        </Text>
+      </View>
+
+      {settingsSections.map((section, sectionIndex) => (
+        <View key={sectionIndex} style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>
+            {section.title}
+          </Text>
+          <View style={[styles.sectionContent, { backgroundColor: theme.backgroundCard }]}>
+            {section.items.map((item, itemIndex) => renderSettingItem(item, itemIndex))}
           </View>
         </View>
+      ))}
 
-        {/* Appearance Section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-            Appearance
-          </Text>
-          <View style={[styles.sectionContent, { backgroundColor: colors.card }]}>
-            <SettingItem
-              icon="moon-outline"
-              title="Dark Mode"
-              subtitle="Toggle dark theme"
-              rightElement={
-                <Switch
-                  value={isDarkMode}
-                  onValueChange={toggleTheme}
-                  trackColor={{ false: '#767577', true: colors.primary }}
-                  thumbColor="#f4f3f4"
-                />
-              }
-            />
-          </View>
-        </View>
-
-        {/* Storage Section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-            Storage
-          </Text>
-          <View style={[styles.sectionContent, { backgroundColor: colors.card }]}>
-            <SettingItem
-              icon="folder-outline"
-              title="Storage Location"
-              subtitle="Download location"
-            />
-            <SettingItem
-              icon="trash-outline"
-              title="Clear Cache"
-              subtitle="Free up storage space"
-            />
-          </View>
-        </View>
-
-        {/* About Section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-            About
-          </Text>
-          <View style={[styles.sectionContent, { backgroundColor: colors.card }]}>
-            <SettingItem
-              icon="information-circle-outline"
-              title="About"
-              subtitle="App version & developer info"
-            />
-            <SettingItem
-              icon="shield-checkmark-outline"
-              title="Privacy Policy"
-            />
-            <SettingItem
-              icon="star-outline"
-              title="Rate App"
-            />
-          </View>
-        </View>
-
-        {/* Footer */}
-        <View style={styles.footer}>
-          <Text style={[styles.footerText, { color: colors.textSecondary }]}>
-            Made with ❤️
-          </Text>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+      <View style={styles.footer}>
+        <Text style={[styles.footerText, { color: theme.textLight }]}>
+          Status Downloader v1.0.0
+        </Text>
+        <Text style={[styles.footerSubtext, { color: theme.textLight }]}>
+          Made with ❤️
+        </Text>
+      </View>
+    </ScrollView>
   );
 };
 
@@ -136,41 +170,24 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  headerSection: {
-    paddingVertical: 30,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    marginBottom: 20,
+  header: {
+    paddingHorizontal: 16,
+    paddingVertical: 20,
   },
-  logoContainer: {
-    alignItems: 'center',
-  },
-  logo: {
-    width: 80,
-    height: 80,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  appName: {
-    fontSize: 22,
+  headerTitle: {
+    fontSize: 28,
     fontWeight: '700',
   },
-  appVersion: {
-    fontSize: 14,
-    marginTop: 4,
-  },
   section: {
-    marginBottom: 20,
-    paddingHorizontal: 20,
+    marginBottom: 24,
+    paddingHorizontal: 16,
   },
   sectionTitle: {
     fontSize: 13,
     fontWeight: '600',
     textTransform: 'uppercase',
     marginBottom: 8,
-    marginLeft: 4,
+    letterSpacing: 1,
   },
   sectionContent: {
     borderRadius: 12,
@@ -180,7 +197,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 14,
+    paddingVertical: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
   },
@@ -189,24 +206,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
   },
-  settingTextContainer: {
-    marginLeft: 12,
-    flex: 1,
+  settingRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  settingTitle: {
-    fontSize: 15,
-    fontWeight: '500',
+  settingLabel: {
+    fontSize: 16,
+    marginLeft: 12,
   },
   settingSubtitle: {
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: 14,
+    marginRight: 8,
   },
   footer: {
-    paddingVertical: 30,
     alignItems: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 16,
   },
   footerText: {
     fontSize: 14,
+    marginBottom: 4,
+  },
+  footerSubtext: {
+    fontSize: 12,
   },
 });
 

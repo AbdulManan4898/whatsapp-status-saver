@@ -1,93 +1,99 @@
-// src/screens/SavedScreen.js
 import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
-  TouchableOpacity,
   Image,
-  SafeAreaView,
+  TouchableOpacity,
+  Dimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../theme/ThemeContext';
 
-// Mock saved data
-const mockSaved = [
-  { id: '1', filename: 'saved1.jpg', type: 'image', date: '2024-01-15' },
-  { id: '2', filename: 'saved2.mp4', type: 'video', date: '2024-01-14' },
-];
+const { width } = Dimensions.get('window');
+const NUM_COLUMNS = 3;
+const CARD_SIZE = width / NUM_COLUMNS - 12;
 
 const SavedScreen = () => {
-  const { colors, isDarkMode } = useTheme();
-  const [savedItems, setSavedItems] = useState(mockSaved);
+  const { theme, isDark } = useTheme();
+  const [savedItems, setSavedItems] = useState([]);
 
-  const handleDelete = (id) => {
-    setSavedItems(prev => prev.filter(item => item.id !== id));
-  };
-
-  const handleShare = (item) => {
-    // Share functionality will be added in Phase 4
-    console.log('Share:', item);
-  };
+  // Mock saved items
+  const mockSavedItems = [
+    { id: '1', type: 'image', uri: 'https://via.placeholder.com/150/25D366/FFFFFF?text=Saved+1', date: '2 hours ago' },
+    { id: '2', type: 'image', uri: 'https://via.placeholder.com/150/128C7E/FFFFFF?text=Saved+2', date: 'Yesterday' },
+    { id: '3', type: 'video', uri: 'https://via.placeholder.com/150/80868B/FFFFFF?text=Saved+Video+1', date: '2 days ago' },
+  ];
 
   const renderSavedItem = ({ item }) => (
-    <View style={[styles.savedCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={styles.thumbnailContainer}>
-        <View style={[styles.placeholder, { backgroundColor: colors.border }]}>
-          <Icon 
-            name={item.type === 'video' ? 'play-circle' : 'image'} 
-            size={30} 
-            color={colors.primary} 
-          />
+    <TouchableOpacity
+      style={[
+        styles.card,
+        {
+          width: CARD_SIZE,
+          height: CARD_SIZE,
+          margin: 4,
+          backgroundColor: theme.backgroundCard,
+        },
+      ]}
+    >
+      <Image
+        source={{ uri: item.uri }}
+        style={styles.cardImage}
+        resizeMode="cover"
+      />
+      {item.type === 'video' && (
+        <View style={styles.videoOverlay}>
+          <Icon name="play-circle" size={28} color="#FFFFFF" />
         </View>
-      </View>
-      <View style={styles.infoContainer}>
-        <Text style={[styles.filename, { color: colors.text }]} numberOfLines={1}>
-          {item.filename}
-        </Text>
-        <Text style={[styles.date, { color: colors.textSecondary }]}>
-          {item.date}
-        </Text>
-      </View>
-      <View style={styles.actionContainer}>
-        <TouchableOpacity 
-          style={[styles.actionButton, { borderColor: colors.border }]}
-          onPress={() => handleShare(item)}
-        >
-          <Icon name="share-outline" size={20} color={colors.text} />
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.actionButton, { borderColor: colors.border }]}
-          onPress={() => handleDelete(item.id)}
-        >
-          <Icon name="trash-outline" size={20} color={colors.error} />
+      )}
+      <View style={styles.cardOverlay}>
+        <TouchableOpacity style={styles.deleteButton}>
+          <Icon name="close-circle" size={20} color="#FF3B30" />
         </TouchableOpacity>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      {savedItems.length > 0 ? (
-        <FlatList
-          data={savedItems}
-          renderItem={renderSavedItem}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContainer}
-        />
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      {savedItems.length > 0 || mockSavedItems.length > 0 ? (
+        <>
+          <View style={styles.header}>
+            <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>
+              Saved Statuses
+            </Text>
+            <Text style={[styles.headerSubtitle, { color: theme.textLight }]}>
+              {mockSavedItems.length} items saved
+            </Text>
+          </View>
+          <FlatList
+            data={mockSavedItems}
+            renderItem={renderSavedItem}
+            keyExtractor={item => item.id}
+            numColumns={NUM_COLUMNS}
+            contentContainerStyle={styles.gridContainer}
+            showsVerticalScrollIndicator={false}
+          />
+        </>
       ) : (
         <View style={styles.emptyContainer}>
-          <Icon name="download-outline" size={80} color={colors.textSecondary} />
-          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+          <Icon
+            name="save-outline"
+            size={64}
+            color={theme.textLight}
+            style={styles.emptyIcon}
+          />
+          <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
             No saved statuses
           </Text>
-          <Text style={[styles.emptySubText, { color: colors.textSecondary }]}>
-            Downloaded statuses will appear here
+          <Text style={[styles.emptySubtext, { color: theme.textLight }]}>
+            Download statuses to save them here
           </Text>
         </View>
       )}
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -95,65 +101,69 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  listContainer: {
-    padding: 16,
+  header: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
   },
-  savedCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    marginBottom: 12,
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+  },
+  gridContainer: {
+    padding: 4,
+  },
+  card: {
     borderRadius: 12,
-    borderWidth: 1,
-  },
-  thumbnailContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
     overflow: 'hidden',
-    marginRight: 12,
+    position: 'relative',
   },
-  placeholder: {
+  cardImage: {
     width: '100%',
     height: '100%',
+  },
+  videoOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.3)',
   },
-  infoContainer: {
-    flex: 1,
+  cardOverlay: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
   },
-  filename: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  date: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  actionContainer: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  actionButton: {
-    padding: 8,
-    borderWidth: 1,
-    borderRadius: 8,
-    marginLeft: 8,
+  deleteButton: {
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 12,
+    padding: 2,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 40,
+    paddingHorizontal: 32,
+  },
+  emptyIcon: {
+    marginBottom: 16,
+    opacity: 0.5,
   },
   emptyText: {
     fontSize: 18,
-    fontWeight: '500',
-    marginTop: 16,
+    fontWeight: '600',
+    marginBottom: 8,
   },
-  emptySubText: {
+  emptySubtext: {
     fontSize: 14,
-    marginTop: 8,
     textAlign: 'center',
   },
 });

@@ -1,21 +1,23 @@
-// App.js
-import React from 'react';
+import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
-import { ThemeProvider } from './src/theme/ThemeContext';
-import AppNavigator from './src/components/navigation/AppNavigator';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'react-native';
+import AppNavigator from './src/navigation/AppNavigator';
+import { checkAndRequestPermissions } from './src/modules/PermissionModule';
 
 const App = () => {
+  useEffect(() => {
+    // Request permissions on app start
+    checkAndRequestPermissions();
+  }, []);
+
   return (
-    <ThemeProvider>
-      <SafeAreaProvider>
-        <StatusBar barStyle="dark-content" />
-        <NavigationContainer>
-          <AppNavigator />
-        </NavigationContainer>
-      </SafeAreaProvider>
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+      <NavigationContainer>
+        <AppNavigator />
+      </NavigationContainer>
+    </SafeAreaProvider>
   );
 };
 

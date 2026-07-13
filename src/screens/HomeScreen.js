@@ -1,163 +1,217 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-  TouchableOpacity,
   FlatList,
+  TouchableOpacity,
   Image,
-  Dimensions,
+  ActivityIndicator,
   RefreshControl,
+  Alert,
+  Dimensions,
+  Platform,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/Ionicons';
-import { useTheme } from '../theme/ThemeContext';
+import FileScanner from '../modules/FileScanner';
+import StorageManager from '../modules/StorageManager';
+import StatusModel from '../modules/StatusModel';
+import { checkAndRequestPermissions } from '../modules/PermissionModule';
 
 const { width } = Dimensions.get('window');
-const NUM_COLUMNS = 3;
-const CARD_SIZE = width / NUM_COLUMNS - 12;
+const numColumns = 3;
+const itemSize = width / numColumns;
 
-const HomeScreen = () => {
-  const { theme, isDark } = useTheme();
-  const [refreshing, setRefreshing] = useState(false);
+const HomeScreen = ({ navigation }) => {
   const [statuses, setStatuses] = useState([]);
-  const [selectedTab, setSelectedTab] = useState('images');
+  const [filteredStatuses, setFilteredStatuses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedFilter, setSelectedFilter] = useState('all'); // 'all', 'images', 'videos'
+  const [scanError, setScanError] = useState(null);
 
-  // Mock data for UI demonstration
-  const mockStatuses = [
-    { id: '1', type: 'image', uri: 'https://via.placeholder.com/150/25D366/FFFFFF?text=Status+1' },
-    { id: '2', type: 'image', uri: 'https://via.placeholder.com/150/128C7E/FFFFFF?text=Status+2' },
-    { id: '3', type: 'video', uri: 'https://via.placeholder.com/150/80868B/FFFFFF?text=Video+1', duration: '0:15' },
-    { id: '4', type: 'image', uri: 'https://via.placeholder.com/150/25D366/FFFFFF?text=Status+3' },
-    { id: '5', type: 'image', uri: 'https://via.placeholder.com/150/128C7E/FFFFFF?text=Status+4' },
-    { id: '6', type: 'video', uri: 'https://via.placeholder.com/150/80868B/FFFFFF?text=Video+2', duration: '0:30' },
-    { id: '7', type: 'image', uri: 'https://via.placeholder.com/150/25D366/FFFFFF?text=Status+5' },
-    { id: '8', type: 'image', uri: 'https://via.placeholder.com/150/128C7E/FFFFFF?text=Status+6' },
-    { id: '9', type: 'video', uri: 'https://via.placeholder.com/150/80868B/FFFFFF?text=Video+3', duration: '0:22' },
-  ];
+  const fileScanner = new FileScanner();
+  const storageManager = new StorageManager();
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    // Simulate refresh
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 2000);
+  useEffect(() => {
+    initializeApp();
+  }, []);
+
+  const initializeApp = async () => {
+    try {
+      await checkAndRequestPermissions();
+      await storageManager.initialize();
+      await loadStatuses();
+    } catch (error) {
+      console.error('Initialization error:', error);
+      setScanError('Failed to initialize app');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const renderStatusItem = ({ item }) => (
-    <TouchableOpacity
-      style={[
-        styles.card,
-        {
-          width: CARD_SIZE,
-          height: CARD_SIZE,
-          margin: 4,
-          backgroundColor: theme.backgroundCard,
-        },
-      ]}
-      onPress={() => {
-        // Handle status preview
-        console.log('Status selected:', item.id);
-      }}
-    >
-      <Image
-        source={{ uri: item.uri }}
-        style={styles.cardImage}
-        resizeMode="cover"
-      />
-      {item.type === 'video' && (
-        <View style={styles.videoOverlay}>
-          <Icon name="play-circle" size={32} color="#FFFFFF" />
-          <Text style={styles.durationText}>{item.duration}</Text>
+  const loadStatuses = async () => {
+    try {
+      setLoading(true);
+      setScanError(null);
+      
+      const scannedStatuses = await fileScanner.scanStatuses();
+      setStatuses(scannedStatuses);
+      applyFilter(scannedStatuses, selectedFilter);
+      
+      if (scannedStatuses.length === 0) {
+        setScanError('No statuses found. Make sure WhatsApp is installed and has statuses.');
+      }
+    } catch (error) {
+      console.error('Error loading statuses:', error);
+      setScanError(error.message || 'Failed to load statuses');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadStatuses();
+    setRefreshing(false);
+  };
+
+  const applyFilter = (statusList, filter) => {
+    let filtered = statusList;
+    
+    if (filter === 'images') {
+      filtered = statusList.filter(s => s.isImage());
+    } else if (filter === 'videos') {
+      filtered = statusList.filter(s => s.isVideo());
+    }
+    
+    setFilteredStatuses(filtered);
+  };
+
+  const handleFilterChange = (filter) => {
+    setSelectedFilter(filter);
+    applyFilter(statuses, filter);
+  };
+
+  const handleStatusPress = (status) => {
+    navigation.navigate('MediaPreview', { status: status.toJSON() });
+  };
+
+  const renderStatusItem = ({ item }) => {
+    const isImage = item.isImage();
+    const isVideo = item.isVideo();
+    
+    return (
+      <TouchableOpacity
+        style={styles.itemContainer}
+        onPress={() => handleStatusPress(item)}
+        activeOpacity={0.8}
+      >
+        <View style={styles.imageWrapper}>
+          {isImage ? (
+            <Image
+              source={{ uri: `file://${item.path}` }}
+              style={styles.image}
+              resizeMode="cover"
+            />
+          ) : isVideo ? (
+            <View style={styles.videoPlaceholder}>
+              <Image
+                source={{ uri: `file://${item.path}` }}
+                style={styles.image}
+                resizeMode="cover"
+              />
+              <View style={styles.videoOverlay}>
+                <Text style={styles.videoIcon}>▶</Text>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.placeholder}>
+              <Text style={styles.placeholderText}>📁</Text>
+            </View>
+          )}
+          
+          {item.isDownloaded && (
+            <View style={styles.downloadedBadge}>
+              <Text style={styles.badgeText}>✓</Text>
+            </View>
+          )}
         </View>
-      )}
-      <View style={styles.cardOverlay}>
-        <Icon name="download-outline" size={20} color="#FFFFFF" />
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
-  const filteredStatuses = mockStatuses.filter(
-    item => item.type === selectedTab.replace('s', '')
-  );
-
-  return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Tab Selector */}
-      <View style={styles.tabContainer}>
+  const renderHeader = () => (
+    <View style={styles.header}>
+      <Text style={styles.title}>WhatsApp Statuses</Text>
+      <Text style={styles.subtitle}>
+        {filteredStatuses.length} statuses found
+      </Text>
+      
+      <View style={styles.filterContainer}>
         <TouchableOpacity
-          style={[
-            styles.tab,
-            selectedTab === 'images' && {
-              borderBottomColor: theme.primary,
-              borderBottomWidth: 3,
-            },
-          ]}
-          onPress={() => setSelectedTab('images')}
+          style={[styles.filterButton, selectedFilter === 'all' && styles.filterActive]}
+          onPress={() => handleFilterChange('all')}
         >
-          <Text
-            style={[
-              styles.tabText,
-              {
-                color: selectedTab === 'images' ? theme.primary : theme.textLight,
-              },
-            ]}
-          >
+          <Text style={[styles.filterText, selectedFilter === 'all' && styles.filterTextActive]}>
+            All
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterButton, selectedFilter === 'images' && styles.filterActive]}
+          onPress={() => handleFilterChange('images')}
+        >
+          <Text style={[styles.filterText, selectedFilter === 'images' && styles.filterTextActive]}>
             Images
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[
-            styles.tab,
-            selectedTab === 'videos' && {
-              borderBottomColor: theme.primary,
-              borderBottomWidth: 3,
-            },
-          ]}
-          onPress={() => setSelectedTab('videos')}
+          style={[styles.filterButton, selectedFilter === 'videos' && styles.filterActive]}
+          onPress={() => handleFilterChange('videos')}
         >
-          <Text
-            style={[
-              styles.tabText,
-              {
-                color: selectedTab === 'videos' ? theme.primary : theme.textLight,
-              },
-            ]}
-          >
+          <Text style={[styles.filterText, selectedFilter === 'videos' && styles.filterTextActive]}>
             Videos
           </Text>
         </TouchableOpacity>
       </View>
+    </View>
+  );
 
-      {/* Status Grid */}
-      {filteredStatuses.length > 0 ? (
-        <FlatList
-          data={filteredStatuses}
-          renderItem={renderStatusItem}
-          keyExtractor={item => item.id}
-          numColumns={NUM_COLUMNS}
-          contentContainerStyle={styles.gridContainer}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-          showsVerticalScrollIndicator={false}
-        />
-      ) : (
-        <View style={styles.emptyContainer}>
-          <Icon
-            name="images-outline"
-            size={64}
-            color={theme.textLight}
-            style={styles.emptyIcon}
-          />
-          <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-            No statuses found
-          </Text>
-          <Text style={[styles.emptySubtext, { color: theme.textLight }]}>
-            Statuses will appear here when available
-          </Text>
-        </View>
-      )}
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#25D366" />
+        <Text style={styles.loadingText}>Scanning for statuses...</Text>
+        <Text style={styles.loadingSubtext}>This may take a moment</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <FlatList
+        data={filteredStatuses}
+        renderItem={renderStatusItem}
+        keyExtractor={(item) => item.id}
+        numColumns={numColumns}
+        ListHeaderComponent={renderHeader}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={() => (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyIcon}>📭</Text>
+            <Text style={styles.emptyTitle}>No Statuses Found</Text>
+            <Text style={styles.emptyText}>
+              {scanError || 'Make sure WhatsApp has statuses available'}
+            </Text>
+            <TouchableOpacity style={styles.retryButton} onPress={loadStatuses}>
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      />
     </View>
   );
 };
@@ -165,35 +219,87 @@ const HomeScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F5F5F5',
   },
-  tabContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-  },
-  tab: {
+  loadingContainer: {
     flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 8,
-    marginHorizontal: 8,
+    backgroundColor: '#F5F5F5',
   },
-  tabText: {
+  loadingText: {
+    marginTop: 16,
     fontSize: 16,
-    fontWeight: '600',
+    color: '#333',
+    fontWeight: '500',
   },
-  gridContainer: {
-    padding: 4,
+  loadingSubtext: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#666',
   },
-  card: {
-    borderRadius: 12,
+  header: {
+    padding: 16,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+    marginBottom: 4,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 4,
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    marginTop: 12,
+    gap: 8,
+  },
+  filterButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F0F0F0',
+    marginRight: 8,
+  },
+  filterActive: {
+    backgroundColor: '#25D366',
+  },
+  filterText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  filterTextActive: {
+    color: '#FFFFFF',
+  },
+  listContent: {
+    paddingBottom: 16,
+  },
+  itemContainer: {
+    width: itemSize,
+    height: itemSize,
+    padding: 1,
+  },
+  imageWrapper: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 4,
     overflow: 'hidden',
     position: 'relative',
   },
-  cardImage: {
+  image: {
     width: '100%',
     height: '100%',
+  },
+  videoPlaceholder: {
+    flex: 1,
+    position: 'relative',
   },
   videoOverlay: {
     position: 'absolute',
@@ -205,38 +311,68 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.3)',
   },
-  durationText: {
+  videoIcon: {
+    fontSize: 40,
+    color: '#FFFFFF',
+  },
+  placeholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F0F0F0',
+  },
+  placeholderText: {
+    fontSize: 30,
+  },
+  downloadedBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: '#25D366',
+    borderRadius: 12,
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badgeText: {
     color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: '600',
-    marginTop: 4,
-  },
-  cardOverlay: {
-    position: 'absolute',
-    bottom: 8,
-    right: 8,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 20,
-    padding: 6,
+    fontWeight: 'bold',
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 32,
+    paddingVertical: 60,
   },
   emptyIcon: {
+    fontSize: 64,
     marginBottom: 16,
-    opacity: 0.5,
   },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
     marginBottom: 8,
   },
-  emptySubtext: {
+  emptyText: {
     fontSize: 14,
+    color: '#666',
     textAlign: 'center',
+    marginHorizontal: 40,
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#25D366',
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 25,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

@@ -1,21 +1,23 @@
-// src/utils/constants.js
-export const APP_CONFIG = {
-  APP_NAME: 'Status Saver',
-  VERSION: '1.0.0',
-  FOLDER_NAME: 'StatusSaver',
-};
+export const WHATSAPP_STATUS_PATH = '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/.Statuses';
 
-export const STORAGE_KEYS = {
-  THEME: '@theme_preference',
-  SAVED_STATUSES: '@saved_statuses',
-};
+export const APP_NAME = 'Status Downloader';
+export const APP_VERSION = '1.0.0';
+
+export const STORAGE_PERMISSION = 'android.permission.READ_EXTERNAL_STORAGE';
 
 export const FILE_TYPES = {
   IMAGE: 'image',
   VIDEO: 'video',
 };
 
-export const STATUS_FOLDERS = {
-  WHATSAPP: '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/.Statuses',
-  BUSINESS: '/storage/emulated/0/Android/media/com.whatsapp.w4b/WhatsApp Business/Media/.Statuses',
+export const FILE_EXTENSIONS = {
+  IMAGE: ['.jpg', '.jpeg', '.png', '.gif', '.bmp'],
+  VIDEO: ['.mp4', '.3gp', '.mkv', '.avi', '.mov'],
+};
+
+export const MAX_VIDEO_DURATION = 60; // seconds
+
+export const CACHE_CONFIG = {
+  maxAge: 3600000, // 1 hour
+  maxItems: 100,
 };

@@ -1,165 +1,152 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Switch,
   TouchableOpacity,
+  Switch,
+  Alert,
   ScrollView,
-  Linking,
+  ActivityIndicator,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/Ionicons';
-import { useTheme } from '../theme/ThemeContext';
+import StorageManager from '../modules/StorageManager';
 
 const SettingsScreen = () => {
-  const { theme, isDark, toggleTheme } = useTheme();
+  const [darkMode, setDarkMode] = useState(false);
+  const [storageUsage, setStorageUsage] = useState({ size: 0, count: 0 });
+  const [loading, setLoading] = useState(true);
+  
+  const storageManager = new StorageManager();
 
-  const settingsSections = [
-    {
-      title: 'Appearance',
-      items: [
-        {
-          icon: isDark ? 'moon' : 'sunny',
-          label: 'Dark Mode',
-          type: 'switch',
-          value: isDark,
-          onPress: toggleTheme,
-        },
-      ],
-    },
-    {
-      title: 'Storage',
-      items: [
-        {
-          icon: 'folder-open',
-          label: 'Storage Path',
-          type: 'button',
-          subtitle: 'Default',
-          onPress: () => console.log('Change storage path'),
-        },
-        {
-          icon: 'trash-bin',
-          label: 'Clear Cache',
-          type: 'button',
-          subtitle: 'Clear temporary files',
-          onPress: () => console.log('Clear cache'),
-        },
-      ],
-    },
-    {
-      title: 'About',
-      items: [
-        {
-          icon: 'information-circle',
-          label: 'Version',
-          type: 'info',
-          subtitle: '1.0.0',
-        },
-        {
-          icon: 'chatbubble',
-          label: 'Privacy Policy',
-          type: 'button',
-          onPress: () => Linking.openURL('https://example.com/privacy'),
-        },
-        {
-          icon: 'mail',
-          label: 'Contact Support',
-          type: 'button',
-          onPress: () => Linking.openURL('mailto:support@example.com'),
-        },
-      ],
-    },
-  ];
+  useEffect(() => {
+    loadStorageInfo();
+  }, []);
 
-  const renderSettingItem = (item, index) => {
-    switch (item.type) {
-      case 'switch':
-        return (
-          <View key={index} style={[styles.settingItem, { borderBottomColor: theme.border }]}>
-            <View style={styles.settingLeft}>
-              <Icon name={item.icon} size={24} color={theme.primary} />
-              <Text style={[styles.settingLabel, { color: theme.textPrimary }]}>
-                {item.label}
-              </Text>
-            </View>
-            <Switch
-              value={item.value}
-              onValueChange={item.onPress}
-              trackColor={{ false: theme.border, true: theme.primary }}
-              thumbColor={item.value ? '#FFFFFF' : '#FFFFFF'}
-            />
-          </View>
-        );
-      case 'button':
-        return (
-          <TouchableOpacity
-            key={index}
-            style={[styles.settingItem, { borderBottomColor: theme.border }]}
-            onPress={item.onPress}
-          >
-            <View style={styles.settingLeft}>
-              <Icon name={item.icon} size={24} color={theme.primary} />
-              <Text style={[styles.settingLabel, { color: theme.textPrimary }]}>
-                {item.label}
-              </Text>
-            </View>
-            <View style={styles.settingRight}>
-              {item.subtitle && (
-                <Text style={[styles.settingSubtitle, { color: theme.textLight }]}>
-                  {item.subtitle}
-                </Text>
-              )}
-              <Icon name="chevron-forward" size={20} color={theme.textLight} />
-            </View>
-          </TouchableOpacity>
-        );
-      case 'info':
-        return (
-          <View key={index} style={[styles.settingItem, { borderBottomColor: theme.border }]}>
-            <View style={styles.settingLeft}>
-              <Icon name={item.icon} size={24} color={theme.primary} />
-              <Text style={[styles.settingLabel, { color: theme.textPrimary }]}>
-                {item.label}
-              </Text>
-            </View>
-            <Text style={[styles.settingSubtitle, { color: theme.textLight }]}>
-              {item.subtitle}
-            </Text>
-          </View>
-        );
-      default:
-        return null;
+  const loadStorageInfo = async () => {
+    try {
+      await storageManager.initialize();
+      const usage = await storageManager.getStorageUsage();
+      setStorageUsage(usage);
+    } catch (error) {
+      console.error('Error loading storage info:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
+  const formatSize = (bytes) => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const handleClearCache = () => {
+    Alert.alert(
+      'Clear Cache',
+      'This will delete all downloaded statuses. Are you sure?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await storageManager.clearAllData();
+              await loadStorageInfo();
+              Alert.alert('Success', 'Cache cleared successfully');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to clear cache');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const renderSettingItem = ({ icon, title, subtitle, action }) => (
+    <View style={styles.settingItem}>
+      <View style={styles.settingLeft}>
+        <Text style={styles.settingIcon}>{icon}</Text>
+        <View style={styles.settingContent}>
+          <Text style={styles.settingTitle}>{title}</Text>
+          {subtitle && <Text style={styles.settingSubtitle}>{subtitle}</Text>}
+        </View>
+      </View>
+      <View>{action}</View>
+    </View>
+  );
+
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: theme.background }]}
-      showsVerticalScrollIndicator={false}
-    >
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <View style={styles.header}>
-        <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>
-          Settings
-        </Text>
+        <Text style={styles.headerTitle}>Settings</Text>
       </View>
 
-      {settingsSections.map((section, sectionIndex) => (
-        <View key={sectionIndex} style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>
-            {section.title}
-          </Text>
-          <View style={[styles.sectionContent, { backgroundColor: theme.backgroundCard }]}>
-            {section.items.map((item, itemIndex) => renderSettingItem(item, itemIndex))}
-          </View>
-        </View>
-      ))}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Appearance</Text>
+        {renderSettingItem({
+          icon: '🌙',
+          title: 'Dark Mode',
+          subtitle: 'Toggle dark theme',
+          action: (
+            <Switch
+              value={darkMode}
+              onValueChange={setDarkMode}
+              trackColor={{ false: '#D0D0D0', true: '#25D366' }}
+              thumbColor={darkMode ? '#FFFFFF' : '#FFFFFF'}
+            />
+          ),
+        })}
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Storage</Text>
+        {renderSettingItem({
+          icon: '💾',
+          title: 'Storage Usage',
+          subtitle: loading ? 'Loading...' : 
+            `${formatSize(storageUsage.size)} • ${storageUsage.count} items`,
+          action: null,
+        })}
+        {renderSettingItem({
+          icon: '🗑️',
+          title: 'Clear Cache',
+          subtitle: 'Delete all downloaded statuses',
+          action: (
+            <TouchableOpacity style={styles.clearButton} onPress={handleClearCache}>
+              <Text style={styles.clearButtonText}>Clear</Text>
+            </TouchableOpacity>
+          ),
+        })}
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>About</Text>
+        {renderSettingItem({
+          icon: '📱',
+          title: 'App Version',
+          subtitle: '1.0.0',
+          action: null,
+        })}
+        {renderSettingItem({
+          icon: 'ℹ️',
+          title: 'Developer',
+          subtitle: 'Abdul Manan',
+          action: null,
+        })}
+        {renderSettingItem({
+          icon: '🔒',
+          title: 'Privacy Policy',
+          subtitle: 'All data stays on your device',
+          action: null,
+        })}
+      </View>
 
       <View style={styles.footer}>
-        <Text style={[styles.footerText, { color: theme.textLight }]}>
-          Status Downloader v1.0.0
-        </Text>
-        <Text style={[styles.footerSubtext, { color: theme.textLight }]}>
-          Made with ❤️
+        <Text style={styles.footerText}>
+          Made with ❤️ using React Native
         </Text>
       </View>
     </ScrollView>
@@ -169,66 +156,81 @@ const SettingsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F5F5F5',
   },
   header: {
-    paddingHorizontal: 16,
-    paddingVertical: 20,
+    padding: 20,
+    paddingTop: 24,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
   },
   headerTitle: {
     fontSize: 28,
-    fontWeight: '700',
+    fontWeight: 'bold',
+    color: '#333',
   },
   section: {
-    marginBottom: 24,
+    backgroundColor: '#FFFFFF',
+    marginTop: 12,
     paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   sectionTitle: {
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: '600',
-    textTransform: 'uppercase',
-    marginBottom: 8,
-    letterSpacing: 1,
-  },
-  sectionContent: {
-    borderRadius: 12,
-    overflow: 'hidden',
+    color: '#666',
+    marginVertical: 8,
+    letterSpacing: 0.5,
   },
   settingItem: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingVertical: 12,
-    paddingHorizontal: 16,
     borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
   },
   settingLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
-  settingRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  settingIcon: {
+    fontSize: 24,
+    marginRight: 12,
   },
-  settingLabel: {
+  settingContent: {
+    flex: 1,
+  },
+  settingTitle: {
     fontSize: 16,
-    marginLeft: 12,
+    color: '#333',
+    fontWeight: '500',
   },
   settingSubtitle: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 2,
+  },
+  clearButton: {
+    backgroundColor: '#FF3B30',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  clearButtonText: {
+    color: '#FFFFFF',
     fontSize: 14,
-    marginRight: 8,
+    fontWeight: '600',
   },
   footer: {
+    padding: 24,
     alignItems: 'center',
-    paddingVertical: 32,
-    paddingHorizontal: 16,
   },
   footerText: {
+    color: '#999',
     fontSize: 14,
-    marginBottom: 4,
-  },
-  footerSubtext: {
-    fontSize: 12,
   },
 });
 

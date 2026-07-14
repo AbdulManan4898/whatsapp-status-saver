@@ -1,23 +1,37 @@
 import React, { useEffect } from 'react';
+import {
+  SafeAreaView,
+  StatusBar,
+  useColorScheme,
+  LogBox,
+} from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { StatusBar } from 'react-native';
+import { ThemeProvider } from './src/context/ThemeContext';
 import AppNavigator from './src/navigation/AppNavigator';
-import { checkAndRequestPermissions } from './src/modules/PermissionModule';
+import { COLORS } from './src/styles/colors';
+
+// Ignore specific warnings
+LogBox.ignoreLogs([
+  'ViewPropTypes will be removed',
+  'NativeBase:',
+  'VirtualizedLists should never be nested',
+]);
 
 const App = () => {
-  useEffect(() => {
-    // Request permissions on app start
-    checkAndRequestPermissions();
-  }, []);
+  const isDarkMode = useColorScheme() === 'dark';
 
   return (
-    <SafeAreaProvider>
-      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-      <NavigationContainer>
-        <AppNavigator />
-      </NavigationContainer>
-    </SafeAreaProvider>
+    <ThemeProvider>
+      <SafeAreaView style={{ flex: 1, backgroundColor: isDarkMode ? COLORS.dark.background : COLORS.light.background }}>
+        <StatusBar
+          barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+          backgroundColor={isDarkMode ? COLORS.dark.background : COLORS.light.background}
+        />
+        <NavigationContainer>
+          <AppNavigator />
+        </NavigationContainer>
+      </SafeAreaView>
+    </ThemeProvider>
   );
 };
 

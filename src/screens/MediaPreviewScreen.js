@@ -1,134 +1,232 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   Image,
   TouchableOpacity,
-  ActivityIndicator,
-  Alert,
   Dimensions,
+  StyleSheet,
+  ActivityIndicator,
+  Animated,
+  PanResponder,
 } from 'react-native';
-import RNFS from 'react-native-fs';
 import Video from 'react-native-video';
-import StorageManager from '../modules/StorageManager';
-import StatusModel from '../modules/StatusModel';
+import { useTheme } from '../context/ThemeContext';
+import { COLORS, SPACING, FONT_SIZES } from '../styles/colors';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import { formatFileSize } from '../utils/fileUtils';
 
 const { width, height } = Dimensions.get('window');
 
 const MediaPreviewScreen = ({ route, navigation }) => {
-  const { status: statusData } = route.params;
-  const [status] = useState(new StatusModel(statusData));
-  const [isLoading, setIsLoading] = useState(true);
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [isSaved, setIsSaved] = useState(false);
+  const { theme } = useTheme();
+  const colors = COLORS[theme];
   
-  const storageManager = new StorageManager();
+  const { media, mediaList, currentIndex = 0 } = route.params || {};
+  const [currentMedia, setCurrentMedia] = useState(media);
+  const [currentIndexState, setCurrentIndexState] = useState(currentIndex);
+  const [loading, setLoading] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const videoRef = useRef(null);
+  const panResponder = useRef(null);
+  const translateX = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    checkIfSaved();
-  }, []);
-
-  const checkIfSaved = async () => {
-    try {
-      await storageManager.initialize();
-      const saved = storageManager.isStatusSaved(status);
-      setIsSaved(saved);
-    } catch (error) {
-      console.error('Error checking saved status:', error);
+    if (mediaList && mediaList.length > 0) {
+      setCurrentMedia(mediaList[currentIndexState] || media);
     }
+  }, [currentIndexState, mediaList, media]);
+
+  // Setup pan responder for swipe
+  useEffect(() => {
+    panResponder.current = PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > 20;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        translateX.setValue(gestureState.dx);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dx > 50 && currentIndexState > 0) {
+          // Swipe right - previous
+          translateX.setValue(width);
+          setCurrentIndexState(currentIndexState - 1);
+          translateX.setValue(0);
+        } else if (gestureState.dx < -50 && currentIndexState < mediaList.length - 1) {
+          // Swipe left - next
+          translateX.setValue(-width);
+          setCurrentIndexState(currentIndexState + 1);
+          translateX.setValue(0);
+        } else {
+          // Reset
+          Animated.spring(translateX, {
+            toValue: 0,
+            useNativeDriver: true,
+          }).start();
+        }
+      },
+    });
+  }, [currentIndexState, mediaList, translateX]);
+
+  const handleBack = () => {
+    navigation.goBack();
   };
 
-  const handleDownload = async () => {
-    try {
-      setIsDownloading(true);
-      await storageManager.initialize();
-      
-      const savedStatus = await storageManager.saveStatus(status);
-      setIsSaved(true);
-      
-      Alert.alert('Success', 'Status saved successfully!');
-    } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to save status');
-    } finally {
-      setIsDownloading(false);
+  const togglePlay = () => {
+    setIsPlaying(!isPlaying);
+  };
+
+  const handleVideoProgress = (data) => {
+    setProgress(data.currentTime / duration);
+  };
+
+  const handleVideoLoad = (data) => {
+    setDuration(data.duration);
+    setLoading(false);
+  };
+
+  const handleVideoEnd = () => {
+    setIsPlaying(false);
+    videoRef.current?.seek(0);
+  };
+
+  const renderMedia = () => {
+    if (!currentMedia) {
+      return (
+        <View style={styles.errorContainer}>
+          <Icon name="error-outline" size={64} color={colors.textLight} />
+          <Text style={[styles.errorText, { color: colors.text }]}>Media not found</Text>
+        </View>
+      );
     }
+
+    const isVideo = currentMedia.type === 'video';
+
+    if (isVideo) {
+      return (
+        <View style={styles.videoContainer}>
+          <Video
+            ref={videoRef}
+            source={{ uri: `file://${currentMedia.path}` }}
+            style={styles.video}
+            paused={!isPlaying}
+            onProgress={handleVideoProgress}
+            onLoad={handleVideoLoad}
+            onEnd={handleVideoEnd}
+            resizeMode="contain"
+            repeat={false}
+            volume={1.0}
+            muted={false}
+          />
+          {loading && (
+            <View style={styles.loadingOverlay}>
+              <ActivityIndicator size="large" color="#FFFFFF" />
+            </View>
+          )}
+          <TouchableOpacity style={styles.playButton} onPress={togglePlay}>
+            <Icon
+              name={isPlaying ? 'pause-circle-filled' : 'play-circle-filled'}
+              size={64}
+              color="rgba(255,255,255,0.9)"
+            />
+          </TouchableOpacity>
+          {!loading && (
+            <View style={styles.progressBarContainer}>
+              <View style={[styles.progressBar, { width: `${progress * 100}%` }]} />
+            </View>
+          )}
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.imageContainer}>
+        <Image
+          source={{ uri: `file://${currentMedia.path}` }}
+          style={styles.image}
+          resizeMode="contain"
+          onLoadStart={() => setLoading(true)}
+          onLoadEnd={() => setLoading(false)}
+        />
+        {loading && (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="large" color="#FFFFFF" />
+          </View>
+        )}
+      </View>
+    );
   };
 
-  const handleShare = async () => {
-    // Share implementation will be in Phase 4
-    Alert.alert('Share', 'Share feature coming soon!');
+  const renderControls = () => {
+    const isVideo = currentMedia?.type === 'video';
+    return (
+      <View style={styles.controlsContainer}>
+        <TouchableOpacity style={styles.controlButton} onPress={handleBack}>
+          <Icon name="arrow-back" size={28} color="#FFFFFF" />
+        </TouchableOpacity>
+        <View style={styles.infoContainer}>
+          <Text style={styles.fileName} numberOfLines={1}>
+            {currentMedia?.name || 'Media'}
+          </Text>
+          <Text style={styles.fileSize}>
+            {currentMedia?.size ? formatFileSize(currentMedia.size) : ''}
+          </Text>
+        </View>
+        <View style={styles.actionsContainer}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => {
+              // Share will be implemented in Phase 4
+              console.log('Share pressed');
+            }}
+          >
+            <Icon name="share" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.downloadButton]}
+            onPress={() => {
+              // Download will be implemented in Phase 4
+              console.log('Download pressed');
+            }}
+          >
+            <Icon name="file-download" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
   };
 
-  const renderImage = () => (
-    <Image
-      source={{ uri: `file://${status.path}` }}
-      style={styles.media}
-      resizeMode="contain"
-      onLoad={() => setIsLoading(false)}
-    />
-  );
-
-  const renderVideo = () => (
-    <View style={styles.videoContainer}>
-      <Video
-        source={{ uri: `file://${status.path}` }}
-        style={styles.media}
-        controls={true}
-        resizeMode="contain"
-        onLoad={() => setIsLoading(false)}
-        paused={false}
-        repeat={true}
-      />
-    </View>
-  );
+  const renderCounter = () => {
+    if (mediaList && mediaList.length > 1) {
+      return (
+        <View style={styles.counterContainer}>
+          <Text style={styles.counterText}>
+            {currentIndexState + 1} / {mediaList.length}
+          </Text>
+        </View>
+      );
+    }
+    return null;
+  };
 
   return (
-    <View style={styles.container}>
-      {isLoading && (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#25D366" />
-          <Text style={styles.loadingText}>Loading media...</Text>
-        </View>
-      )}
-      
-      <View style={styles.mediaContainer}>
-        {status.isImage() ? renderImage() : renderVideo()}
-      </View>
-      
-      <View style={styles.footer}>
-        <View style={styles.infoContainer}>
-          <Text style={styles.filename} numberOfLines={1}>
-            {status.filename}
-          </Text>
-          <Text style={styles.fileInfo}>
-            {status.getFormattedSize()} • {status.type.charAt(0).toUpperCase() + status.type.slice(1)}
-          </Text>
-        </View>
-        
-        <View style={styles.actionContainer}>
-          <TouchableOpacity
-            style={[styles.actionButton, isSaved && styles.savedButton]}
-            onPress={handleDownload}
-            disabled={isDownloading || isSaved}
-          >
-            {isDownloading ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <Text style={styles.actionButtonText}>
-                {isSaved ? 'Saved ✓' : 'Download'}
-              </Text>
-            )}
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={[styles.actionButton, styles.shareButton]}
-            onPress={handleShare}
-          >
-            <Text style={styles.actionButtonText}>Share</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+    <View style={[styles.container, { backgroundColor: '#000000' }]}>
+      <Animated.View
+        style={[
+          styles.contentContainer,
+          {
+            transform: [{ translateX }],
+          },
+        ]}
+        {...panResponder.current?.panHandlers}
+      >
+        {renderMedia()}
+        {renderControls()}
+        {renderCounter()}
+      </Animated.View>
     </View>
   );
 };
@@ -138,7 +236,28 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000000',
   },
-  loadingContainer: {
+  contentContainer: {
+    flex: 1,
+  },
+  imageContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  image: {
+    width: width,
+    height: height,
+  },
+  videoContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  video: {
+    width: width,
+    height: height,
+  },
+  loadingOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
@@ -146,67 +265,87 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#000000',
-    zIndex: 10,
+    backgroundColor: 'rgba(0,0,0,0.3)',
   },
-  loadingText: {
-    color: '#FFFFFF',
-    marginTop: 12,
-    fontSize: 14,
-  },
-  mediaContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  controlsContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: SPACING.xl + 20,
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.md,
+    backgroundColor: 'rgba(0,0,0,0.3)',
   },
-  media: {
-    width: width,
-    height: height * 0.7,
-  },
-  videoContainer: {
-    width: width,
-    height: height * 0.7,
-  },
-  footer: {
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    padding: 16,
-    paddingBottom: 32,
+  controlButton: {
+    padding: SPACING.sm,
   },
   infoContainer: {
-    marginBottom: 12,
+    flex: 1,
+    marginHorizontal: SPACING.md,
   },
-  filename: {
+  fileName: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: FONT_SIZES.md,
     fontWeight: '500',
   },
-  fileInfo: {
-    color: '#999999',
-    fontSize: 12,
-    marginTop: 4,
+  fileSize: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: FONT_SIZES.sm,
   },
-  actionContainer: {
+  actionsContainer: {
     flexDirection: 'row',
-    gap: 12,
+    alignItems: 'center',
   },
   actionButton: {
-    flex: 1,
+    padding: SPACING.sm,
+    marginLeft: SPACING.sm,
+  },
+  downloadButton: {
     backgroundColor: '#25D366',
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
+    borderRadius: 20,
+    paddingHorizontal: SPACING.sm,
+  },
+  playButton: {
+    position: 'absolute',
+    alignSelf: 'center',
+  },
+  progressBarContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#25D366',
+  },
+  errorContainer: {
+    flex: 1,
     justifyContent: 'center',
+    alignItems: 'center',
   },
-  savedButton: {
-    backgroundColor: '#4CAF50',
+  errorText: {
+    marginTop: SPACING.md,
+    fontSize: FONT_SIZES.lg,
   },
-  shareButton: {
-    backgroundColor: '#2196F3',
+  counterContainer: {
+    position: 'absolute',
+    bottom: 50,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: 12,
   },
-  actionButtonText: {
+  counterText: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: FONT_SIZES.sm,
   },
 });
 

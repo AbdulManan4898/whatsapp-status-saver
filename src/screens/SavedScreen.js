@@ -1,153 +1,116 @@
-import React, { useState, useEffect } from 'react';
+// src/screens/SavedScreen.js
+import React from 'react';
 import {
   View,
   Text,
   FlatList,
   TouchableOpacity,
-  RefreshControl,
+  Image,
   ActivityIndicator,
+  Alert,
+  StatusBar,
 } from 'react-native';
-import { useTheme } from '../context/ThemeContext';
-import { createThemeStyles } from '../styles/theme';
-import { COLORS, SPACING } from '../styles/colors';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import MediaCard from '../components/MediaCard';
+import { useTheme } from '../context/ThemeContext';
+import { COLORS, SPACING } from '../styles/colors';
+import { useSavedStatuses } from '../hooks/useSavedStatuses';
 import EmptyState from '../components/EmptyState';
 
 const SavedScreen = ({ navigation }) => {
   const { theme } = useTheme();
   const colors = COLORS[theme];
-  const styles = createThemeStyles(theme);
+  const { savedStatuses, loading, deleteStatus } = useSavedStatuses();
 
-  const [savedItems, setSavedItems] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
-  const loadSavedItems = async () => {
-    try {
-      setLoading(true);
-      const savedData = await AsyncStorage.getItem('savedStatuses');
-      if (savedData) {
-        const parsed = JSON.parse(savedData);
-        setSavedItems(parsed);
-      }
-    } catch (error) {
-      console.error('Error loading saved items:', error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  useEffect(() => {
-    loadSavedItems();
-    
-    // Refresh saved items when screen comes into focus
-    const unsubscribe = navigation.addListener('focus', () => {
-      loadSavedItems();
-    });
-
-    return unsubscribe;
-  }, [navigation]);
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadSavedItems();
-  };
-
-  const renderSavedItem = ({ item, index }) => {
-    return (
-      <MediaCard
-        item={item}
-        onPress={() => {
-          navigation.navigate('MediaPreview', {
-            media: item,
-            mediaList: savedItems,
-            currentIndex: index,
-          });
-        }}
-      />
+  const handleDelete = (id, path) => {
+    Alert.alert(
+      'Delete',
+      'Are you sure you want to delete this saved status?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          onPress: async () => {
+            const result = await deleteStatus(id, path);
+            if (!result.success) {
+              Alert.alert('Error', result.message);
+            }
+          },
+          style: 'destructive',
+        },
+      ],
     );
   };
 
-  const renderHeader = () => {
-    if (loading) return null;
-    return (
-      <View style={{ paddingHorizontal: SPACING.md, paddingVertical: SPACING.md }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={[styles.subHeader, { fontSize: 16 }]}>
-            Saved Statuses ({savedItems.length})
-          </Text>
-          {savedItems.length > 0 && (
-            <TouchableOpacity
-              onPress={async () => {
-                try {
-                  await AsyncStorage.removeItem('savedStatuses');
-                  setSavedItems([]);
-                } catch (error) {
-                  console.error('Error clearing saved items:', error);
-                }
-              }}
-            >
-              <Text style={{ color: colors.primary, fontWeight: '500' }}>Clear All</Text>
-            </TouchableOpacity>
-          )}
+  const renderItem = ({ item }) => (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: SPACING.md,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+        backgroundColor: colors.cardBackground,
+        borderRadius: 8,
+        marginHorizontal: SPACING.md,
+        marginVertical: SPACING.xs,
+      }}
+    >
+      {item.type === 'image' ? (
+        <Image
+          source={{ uri: `file://${item.path}` }}
+          style={{ width: 60, height: 60, borderRadius: 8 }}
+        />
+      ) : (
+        <View
+          style={{
+            width: 60,
+            height: 60,
+            backgroundColor: '#333',
+            borderRadius: 8,
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          <Icon name="play-arrow" size={30} color="#fff" />
         </View>
+      )}
+      <View style={{ flex: 1, marginLeft: SPACING.md }}>
+        <Text style={{ color: colors.text, fontSize: 14, fontWeight: '500' }}>
+          {item.filename}
+        </Text>
+        <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+          {new Date(item.date_saved).toLocaleDateString()}
+        </Text>
+      </View>
+      <TouchableOpacity onPress={() => handleDelete(item.id, item.path)}>
+        <Icon name="delete" size={24} color={colors.error || '#ff4444'} />
+      </TouchableOpacity>
+    </View>
+  );
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
-  };
-
-  const renderContent = () => {
-    if (loading) {
-      return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      );
-    }
-
-    if (savedItems.length === 0) {
-      return (
-        <EmptyState
-          title="No Saved Statuses"
-          message="Downloaded statuses will appear here. Start downloading from the Home tab."
-          iconName="folder-open"
-        />
-      );
-    }
-
-    return (
-      <FlatList
-        data={savedItems}
-        renderItem={renderSavedItem}
-        keyExtractor={(item) => item.id || item.path}
-        numColumns={3}
-        contentContainerStyle={{
-          paddingHorizontal: SPACING.xs,
-          paddingBottom: SPACING.xl,
-        }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
-          />
-        }
-        ListHeaderComponent={renderHeader}
-        ListFooterComponent={<View style={{ height: SPACING.md }} />}
-        showsVerticalScrollIndicator={false}
-        columnWrapperStyle={{
-          justifyContent: 'flex-start',
-        }}
-      />
-    );
-  };
+  }
 
   return (
-    <View style={styles.screenContainer}>
-      {renderContent()}
+    <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: StatusBar.currentHeight || 0 }}>
+      <FlatList
+        data={savedStatuses}
+        renderItem={renderItem}
+        keyExtractor={item => item.id}
+        contentContainerStyle={{ paddingVertical: SPACING.sm }}
+        ListEmptyComponent={
+          <EmptyState
+            title="No Saved Statuses"
+            message="Downloaded statuses will appear here."
+            iconName="file-download"
+          />
+        }
+      />
     </View>
   );
 };
